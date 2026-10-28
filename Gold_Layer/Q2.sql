@@ -21,7 +21,7 @@ Use: LEFT JOIN from order_items, COALESCE(SUM(refund_amount), 0)
 */
 
 --q2.1
-SELECT DISTINCT(status) from bronze.orders
+SELECT DISTINCT(status) from bronze.orders;
 
 DROP TABLE IF EXISTS gold.revenue_bycategory;
 CREATE TABLE gold.revenue_bycategory AS
@@ -56,6 +56,71 @@ LEFT JOIN bronze.orders o
 GROUP BY c.country
 ORDER BY nobuy DESC;   
 
-SELECT * FROM gold.customer_nobuypct
+SELECT * FROM gold.customer_nobuypct;
 
---
+--q2.3
+
+SELECT * from bronze.payments limit 5;
+SELECT * from bronze.orders limit 5;
+SELECT * from bronze.shipments limit 5;
+
+SELECT DISTINCT(status), 
+    COUNT(*)
+from bronze.payments
+GROUP BY status;
+
+SELECT DISTINCT(status), 
+    COUNT(*)
+from bronze.shipments
+GROUP BY status;
+
+SELECT DISTINCT(carrier), 
+    COUNT(*)
+from bronze.shipments
+GROUP BY carrier;
+
+DROP TABLE IF EXISTS gold.order_statusshipment;
+CREATE TABLE gold.order_statusshipment AS
+SELECT
+    o.channel,
+    COUNT(*) AS orderlist,
+    COUNT(*) FILTER (WHERE s.order_id IS NULL) AS noship,
+    COALESCE(s.carrier, 'not shipped') as shipmentcomp,
+    ROUND(AVG(s.delivered_at - s.shipped_at) FILTER (WHERE s.shipped_at IS NOT NULL),2) AS avgdate,
+    SUM(p.amount) as paymentamount,
+    SUM(o.total_amount) as ordertotalamount,
+    COALESCE(s.status, 'not shipped') as statusdelivery
+FROM bronze.orders AS o 
+LEFT JOIN bronze.shipments AS s ON o.order_id = s.order_id
+LEFT JOIN bronze.payments AS p ON o.order_id = p.order_id   
+GROUP BY o.channel, s.carrier,s.status
+ORDER BY paymentamount DESC;
+
+SELECT * FROM gold.order_statusshipment;
+-- the null value in avg date is kept because it s valid that the delivered date is not available when the status is not shipped or in transit
+
+--Q2.4
+
+SELECT * FROM bronze.returns limit 5;
+SELECT COUNT(*) FROM bronze.order_items LIMIT 5;
+SELECT * FROM bronze.products limit 5;
+
+
+DROP TABLE IF EXISTS gold.return_categoryreturn;
+CREATE TABLE gold.return_categoryreturn as 
+SELECT 
+    p.category,
+    COUNT(r.return_id) as returnvalue,
+    COUNT(oi.order_item_id) as itemsold,
+    ROUND(100.00 * COUNT(r.return_id) / COUNT(oi.order_item_id),2) as returnrate,
+    COALESCE(SUM(r.refund_amount), 0) as totalrefund
+FROM bronze.products as p
+LEFT JOIN bronze.order_items as oi
+ON p.product_id = oi.product_id 
+LEFT JOIN bronze.returns as r
+on oi.order_item_id = r.order_item_id
+GROUP BY p.category
+ORDER BY returnrate
+;
+
+SELECT * from gold.return_categoryreturn;
